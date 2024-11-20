@@ -1,0 +1,272 @@
+let apps = SpreadsheetApp.openByUrl("https://docs.google.com/spreadsheets/d/1cg-6YQgYJd4gIPTl5eMsp99OJ7DR4Jng6rOcJW1pQiw/edit#gid=2053476237")
+
+
+let sheet2 = apps.getSheetByName('Sheet1')
+
+
+function doGet(e) {
+ let users = apps.getSheetByName("Users")
+ let contracts = apps.getSheetByName("Contracts")
+
+
+ //Registro
+ if (e?.parameter?.register) {
+   const email = e?.parameter?.email
+   const name = e?.parameter?.name
+   const password = e?.parameter?.password
+
+
+   if (!email || !password || !name) {
+     return ContentService.createTextOutput(JSON.stringify(
+       {
+         success: false,
+         message: "All fields are required!"
+       }
+     )).setMimeType(ContentService.MimeType.JSON)
+   }
+
+
+   // checa se email existe
+   const isExistuser = getSheetInfo(users, email)
+   // If username exist
+   const isUsernameExist = getSheetInfo(users, name, 1)
+  
+     if (isExistuser) {
+     return ContentService.createTextOutput(JSON.stringify({
+       success: false,
+       message: "Email already exist!",
+       data: isExistuser || "not matched"
+     })).setMimeType(ContentService.MimeType.JSON)
+   }
+
+
+   if (isUsernameExist) {
+     return ContentService.createTextOutput(JSON.stringify({
+       success: false,
+       message: "Username already exist!",
+       data: isUsernameExist || "not matched"
+     })).setMimeType(ContentService.MimeType.JSON)
+   }
+
+
+   //se email nao existe
+   users.appendRow(["=row()", name, email, password, 'user'])
+   return ContentService.createTextOutput(JSON.stringify({
+     success: true,
+     message: "Register Successfull",
+
+
+   })).setMimeType(ContentService.MimeType.JSON)
+ }
+
+
+
+
+ if (e?.parameter?.contract) {
+   const taxes = getTaxPercentage(contracts, e?.parameter?.contract)
+   return ContentService.createTextOutput(JSON.stringify(taxes)).setMimeType(ContentService.MimeType.JSON)
+ }
+
+
+
+
+ // Login
+ const username = e?.parameter?.username
+ const password = e?.parameter?.password
+ const faield = JSON.stringify(
+   {
+     success: false,
+     message: "Something wrong"
+   }
+ )
+ if (!username || !password) {
+   //  return ContentService.createTextOutput(JSON.stringify(e)).setMimeType(ContentService.MimeType.JSON)
+   return ContentService.createTextOutput(faield)
+ }
+
+
+ const isExistUser = getSheetInfo(users, username, 1)
+ if (!isExistUser) {
+   return ContentService.createTextOutput(faield).setMimeType(ContentService.MimeType.JSON)
+ }
+
+
+ if (isExistUser[1] !== username) {
+   return ContentService.createTextOutput(JSON.stringify(
+     {
+       success: false,
+       message: "Username not matced"
+     }
+   )).setMimeType(ContentService.MimeType.JSON)
+ }
+ if (isExistUser[3].toString() !== password.toString()) {
+   return ContentService.createTextOutput(JSON.stringify(
+     {
+       success: false,
+       message: "Incorrect Password",
+       data: isExistUser[3]
+     }
+   )).setMimeType(ContentService.MimeType.JSON)
+
+
+ }
+
+
+ return ContentService.createTextOutput(JSON.stringify({
+   success: true,
+   message: "Login Successfull!",
+   data: isExistUser
+
+
+ })).setMimeType(ContentService.MimeType.JSON)
+// Login End
+
+
+}
+
+
+
+
+
+
+
+
+// porcentagem por contrato
+function getTaxPercentage(sheet, id) {
+ const pis = sheet.getRange(id, 3).getValues()[0][0]
+ const cofins = sheet.getRange(id, 4).getValues()[0][0]
+ const inss = sheet.getRange(id, 5).getValues()[0][0]
+ const irrf = sheet.getRange(id, 6).getValues()[0][0]
+ const csll = sheet.getRange(id, 7).getValues()[0][0]
+ const iss = sheet.getRange(id, 8).getValues()[0][0]
+ const fac_pb = sheet.getRange(id, 9).getValues()[0][0]
+
+
+ return { pis, cofins, inss, irrf, csll, iss, fac_pb, }
+}
+
+
+// info usuario
+function getSheetInfo(sheet, email, positon=2) {
+ const users = sheet.getDataRange().getValues()
+ let user = users.filter(function (row, index) {
+   let emailValue = row[positon]
+   if (index !== 0) {
+     if (emailValue === email) {
+       return row
+     }
+   }
+ })[0]
+ return user
+}
+
+
+//contratos com taxas
+function doPost(e) {
+ try {
+   let contracts = apps.getSheetByName("Contracts")
+
+
+   let obj = JSON.parse(e.postData.contents);
+   let link
+   if (obj.base64) {
+     let dcode = Utilities.base64Decode(obj.base64);
+     let blob = Utilities.newBlob(dcode, obj.type, obj.name);
+     let newFile = DriveApp.createFile(blob);
+     link = newFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW).getDownloadUrl();
+   }
+   let contact = contracts.getRange(obj.contrato, 2).getValues()[0][0]
+
+
+   sheet2.appendRow([
+     "=row()",
+     obj.pago,
+     contact,
+     obj.nf_number,
+     obj.issue_date,
+     obj.gross_value,
+     obj.pis,
+     obj.cofins,
+     obj.inss,
+     obj.irrf,
+     obj.csll,
+     obj.iss,
+     obj.fac_pb,
+     obj.valor_liquido,
+     obj.recebido,
+     obj.issue_date,
+     obj.difference,
+     obj.comments,
+     obj.conta_vinculada,
+     link,
+     obj.userid]);
+
+
+   return ContentService.createTextOutput(JSON.stringify(obj))
+ } catch (err) {
+   return ContentService.createTextOutput(err)
+ }
+}
+
+
+function doGet(req) {
+  var pdf = req.parameter.pdf;
+  var doc = SpreadsheetApp.getActiveSpreadsheet();
+  var planilha = doc.getSheetByName('Sheet1');
+  var values = planilha.getDataRange().getValues();
+
+  var saida = [];
+  for(var i =1; i < values.length; i++){
+    var row = {};
+    row['CONTRATO'] = values[i][2];
+    row['PDF'] = values[i][19];
+    saida.push(row);
+  }
+
+  if(pdf != null){
+    var retornoSaida = saida.filter(obj => obj.CONTRATO.toLowerCase().includes(pdf.toLowerCase()));
+    return ContentService.createTextOutput(JSON.stringify({retornoSaida})).setMimeType(ContentService.MimeType.JSON);
+  }
+  return ContentService.createTextOutput(JSON.stringify({retornoSaida})).setMimeType(ContentService.MimeType.JSON);
+}
+
+
+
+//senha
+function onOpen() {
+  var ui = SpreadsheetApp.getUi();
+  ui.createMenu('Segurança')
+      .addItem('Verificar Senha', 'solicitarSenha')
+      .addToUi();
+}
+function onOpen() {
+  var ui = SpreadsheetApp.getUi();
+  var password = 'NotasGennesis*1'; // Substitua pela sua senha real
+  var maxAttempts = 3;
+  var lockoutDuration = 5; // Tempo de bloqueio em minutos
+  var lockedUntil = PropertiesService.getScriptProperties().getProperty('lockedUntil');
+
+  if (lockedUntil && new Date() < new Date(lockedUntil)) {
+    ui.alert('Você excedeu o número de tentativas. Tente novamente mais tarde.');
+    SpreadsheetApp.getUi().closeActiveSpreadsheet();
+    return;
+  }
+
+  for (var i = 0; i < maxAttempts; i++) {
+    var response = ui.prompt('Digite a senha:');
+    var guess = response.getResponseText();
+    if (guess == password) {
+      ui.alert('Senha correta. Bem-vindo!');
+      return;
+    } else {
+      ui.alert('Senha incorreta. Tente novamente.');
+    }
+  }
+
+  // Bloquear o acesso por 5 minutos
+  var lockedUntil = new Date();
+  lockedUntil.setMinutes(lockedUntil.getMinutes() + lockoutDuration);
+  PropertiesService.getScriptProperties().setProperty('lockedUntil', lockedUntil.toISOString());
+  ui.alert('Você excedeu o número de tentativas. Tente novamente em 5 minutos!!');
+  SpreadsheetApp.getUi().closeActiveSpreadsheet();
+}
